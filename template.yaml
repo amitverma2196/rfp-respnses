@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Backend solution for RFP responses using S3, Lambda, and Bedrock.
+
+Resources:
+  # S3 Bucket for storing uploaded files
+  DocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "documents-bucket-${AWS::AccountId}-${AWS::Region}"
+      KNOWLEDGEBASE_ID: ""
+
+  # Combined Lambda function (Upload files + Invoke RAG LLM)
+  UploadAndInvokeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.10
+      CodeUri: src/upload_and_invoke/
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref DocumentsBucket
+          KNOWLEDGEBASE_ID: !Ref KnowledgebaseIdParameter
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref DocumentsBucket
+        - AmazonBedrockFullAccess
+      Events:
+        UploadAndInvokeApi:
+          Type: Api
+          Properties:
+            Path: /upload-and-invoke
+            Method: POST
+
+  # Question-Response Lambda function
+  AskQuestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.10
+      CodeUri: src/ask_question/
+      Environment:
+        Variables:
+          KNOWLEDGEBASE_ID: !Ref KnowledgebaseIdParameter
+      Policies:
+        - AmazonBedrockFullAccess
+      Events:
+        AskQuestionApi:
+          Type: Api
+          Properties:
+            Path: /ask-question
+            Method: POST
+
+Outputs:
+  # Output the API Gateway endpoint
+  ApiGatewayEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+
+  # Output the S3 bucket name
+  DocumentsBucketName:
+    Description: "S3 bucket for storing uploaded documents"
+    Value: !Ref DocumentsBucket
+  
+  KnowledgebaseIdParameterName:
+    Description: "KnowledgebaseIdParameter :"
+    Value: !Ref KnowledgebaseIdParameter
